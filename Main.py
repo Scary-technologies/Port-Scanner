@@ -4,196 +4,219 @@ import queue
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import time
-import os
 import ipaddress
-from tkinter.ttk import Combobox
 
-# تنظیمات اولیه GUI
 root = tk.Tk()
-root.title("Professional Port Scanner v2.1")
+root.title("Port Scanner v3.0")
 root.geometry("800x650")
-root.resizable(True, True)
 root.configure(bg="#1E1E1E")
 
-# استایل مدرن
 style = ttk.Style()
 style.theme_use('clam')
 
-# پالت رنگی
 colors = {
     "background": "#1E1E1E",
     "primary": "#2A2F3D",
     "secondary": "#4ECCA3",
-    "text": "#FFFFFF",
-    "warning": "#FF6B6B"
+    "text": "#FFFFFF"
 }
 
 style.configure("TFrame", background=colors["background"])
 style.configure("TLabel", background=colors["background"], foreground=colors["text"], font=("Segoe UI", 10))
-style.configure("TButton", background=colors["secondary"], foreground=colors["text"], 
-                font=("Segoe UI", 10, "bold"), borderwidth=0)
-style.map("TButton", background=[("active", "#3DAF8A")])
-style.configure("TEntry", fieldbackground=colors["primary"], foreground=colors["text"], 
-                font=("Segoe UI", 10), borderwidth=1)
-style.configure("TCombobox", fieldbackground=colors["primary"], foreground=colors["text"])
-style.configure("Vertical.TScrollbar", background=colors["primary"], bordercolor=colors["secondary"])
-style.configure("Horizontal.TProgressbar", background=colors["secondary"], troughcolor=colors["primary"])
+style.configure("TButton", background=colors["secondary"], foreground=colors["text"], font=("Segoe UI", 10, "bold"))
+style.configure("TEntry", fieldbackground=colors["primary"], foreground=colors["text"])
+style.configure("Treeview", background=colors["primary"], foreground=colors["text"], fieldbackground=colors["primary"])
 
-# قاب اصلی
 main_frame = ttk.Frame(root)
 main_frame.pack(padx=20, pady=20, fill=tk.BOTH, expand=True)
 
-# بخش ورودی اطلاعات
 input_frame = ttk.Frame(main_frame)
 input_frame.pack(fill=tk.X, pady=10)
 
-ttk.Label(input_frame, text="Target Host:").grid(row=0, column=0, padx=5, sticky=tk.W)
+ttk.Label(input_frame, text="Target IP/Range:").grid(row=0, column=0, padx=5, sticky=tk.W)
 entry_target = ttk.Entry(input_frame, width=40)
 entry_target.grid(row=0, column=1, padx=5)
+entry_target.insert(0, "192.168.1.1-100")
 
-ttk.Label(input_frame, text="Port Range (e.g., 1-1024):").grid(row=1, column=0, padx=5, sticky=tk.W)
+ttk.Label(input_frame, text="Port Range:").grid(row=1, column=0, padx=5, sticky=tk.W)
 entry_ports = ttk.Entry(input_frame, width=40)
 entry_ports.grid(row=1, column=1, padx=5)
 
 ttk.Label(input_frame, text="Threads:").grid(row=2, column=0, padx=5, sticky=tk.W)
-thread_selector = Combobox(input_frame, values=[str(i) for i in [50, 100, 200, 500]], width=10)
+thread_selector = ttk.Combobox(input_frame, values=["50", "100", "200", "500"], width=10)
 thread_selector.set("100")
 thread_selector.grid(row=2, column=1, padx=5, sticky=tk.W)
 
-# بخش پیشرفته
-advanced_frame = ttk.LabelFrame(main_frame, text="Advanced Options")
-advanced_frame.pack(fill=tk.X, pady=10)
+notebook = ttk.Notebook(main_frame)
+notebook.pack(fill=tk.BOTH, expand=True)
 
-preset_ports_var = tk.StringVar()
-preset_ports = ttk.Combobox(advanced_frame, textvariable=preset_ports_var, 
-                           values=["Common Ports", "Web Servers", "Game Servers", "Full Scan"],
-                           width=15)
-preset_ports.set("Common Ports")
-preset_ports.pack(side=tk.LEFT, padx=5)
-
-timeout_var = tk.StringVar()
-ttk.Label(advanced_frame, text="Timeout (s):").pack(side=tk.LEFT, padx=5)
-timeout_entry = ttk.Entry(advanced_frame, textvariable=timeout_var, width=5)
-timeout_entry.pack(side=tk.LEFT, padx=5)
-timeout_var.set("1")
-
-# نمایش نتایج
-results_frame = ttk.Frame(main_frame)
-results_frame.pack(fill=tk.BOTH, expand=True)
-
-text_area = scrolledtext.ScrolledText(results_frame, width=85, height=15, 
-                                     font=("Consolas", 9), bg=colors["primary"], fg=colors["text"])
+log_tab = ttk.Frame(notebook)
+text_area = scrolledtext.ScrolledText(log_tab, font=("Consolas", 9), bg=colors["primary"], fg=colors["text"])
 text_area.pack(fill=tk.BOTH, expand=True)
+notebook.add(log_tab, text="Logs")
 
-# نوار وضعیت و پیشرفت
+status_tab = ttk.Frame(notebook)
+tree = ttk.Treeview(status_tab, columns=("ip", "port", "status"), show="headings")
+tree.heading("ip", text="IP Address")
+tree.heading("port", text="Port")
+tree.heading("status", text="Status")
+tree.pack(fill=tk.BOTH, expand=True)
+notebook.add(status_tab, text="Active Scans")
+
+open_ports_tab = ttk.Frame(notebook)
+open_ports_tree = ttk.Treeview(open_ports_tab, columns=("ip", "ports"), show="headings")
+open_ports_tree.heading("ip", text="IP Address")
+open_ports_tree.heading("ports", text="Open Ports")
+open_ports_tree.pack(fill=tk.BOTH, expand=True)
+notebook.add(open_ports_tab, text="Open Ports")
+
 status_frame = ttk.Frame(main_frame)
 status_frame.pack(fill=tk.X, pady=10)
-
 progress_label = ttk.Label(status_frame, text="Ready", foreground=colors["secondary"])
 progress_label.pack(side=tk.LEFT)
-
-progress = ttk.Progressbar(status_frame, length=300, mode="determinate", style="Horizontal.TProgressbar")
+progress = ttk.Progressbar(status_frame, mode="determinate")
 progress.pack(side=tk.RIGHT)
 
-# توابع اصلی
-def validate_input():
-    try:
-        target = entry_target.get()
-        ipaddress.ip_address(target)
-    except ValueError:
+control_frame = ttk.Frame(main_frame)
+control_frame.pack(fill=tk.X, pady=10)
+btn_scan = ttk.Button(control_frame, text="Start Scan", command=lambda: start_scan_thread())
+btn_scan.pack(side=tk.LEFT, padx=5)
+btn_stop = ttk.Button(control_frame, text="Stop Scan", state=tk.DISABLED, command=lambda: stop_scan())
+btn_stop.pack(side=tk.LEFT, padx=5)
+btn_export = ttk.Button(control_frame, text="Export", command=lambda: export_results())
+btn_export.pack(side=tk.RIGHT, padx=5)
+
+task_running = False
+scanned_tasks = 0
+total_tasks = 0
+active_scans = {}
+open_ports = {}
+gui_queue = queue.Queue()
+
+def parse_ip_range(target):
+    target = target.strip()
+    if '/' in target:
         try:
-            socket.gethostbyname(target)
+            network = ipaddress.ip_network(target, strict=False)
+            return [str(host) for host in network.hosts()]
         except:
-            messagebox.showerror("Error", "Invalid target address")
-            return False
-    
+            return None
+    if '-' in target:
+        parts = target.split('-')
+        try:
+            start_ip = ipaddress.IPv4Address(parts[0].strip())
+            end_part = parts[1].strip()
+            if '.' not in end_part:
+                base_ip = parts[0].rsplit('.', 1)[0]
+                end_ip = f"{base_ip}.{end_part}"
+                end_ip = ipaddress.IPv4Address(end_ip)
+            else:
+                end_ip = ipaddress.IPv4Address(end_part)
+            ips = []
+            current_ip = start_ip
+            while current_ip <= end_ip:
+                ips.append(str(current_ip))
+                current_ip += 1
+            return ips
+        except:
+            return None
     try:
-        start_port, end_port = map(int, entry_ports.get().split('-'))
-        if not (1 <= start_port <= end_port <= 65535):
+        ipaddress.IPv4Address(target)
+        return [target]
+    except:
+        try:
+            return [socket.gethostbyname(target)]
+        except:
+            return None
+
+def validate_input():
+    ips = parse_ip_range(entry_target.get())
+    if not ips:
+        messagebox.showerror("Error", "Invalid IP Range")
+        return False
+    try:
+        start, end = map(int, entry_ports.get().split('-'))
+        if not 1 <= start <= end <= 65535:
             raise ValueError
     except:
-        messagebox.showerror("Error", "Invalid port range")
+        messagebox.showerror("Error", "Invalid Port Range")
         return False
-    
     return True
 
-def update_preset_ports(event=None):
-    presets = {
-        "Common Ports": "20-1024",
-        "Web Servers": "80-443",
-        "Game Servers": "25565-27015",
-        "Full Scan": "1-65535"
-    }
-    entry_ports.delete(0, tk.END)
-    entry_ports.insert(0, presets[preset_ports.get()])
+def update_gui():
+    while not gui_queue.empty():
+        task = gui_queue.get_nowait()
+        if task[0] == "start":
+            ip, port = task[1], task[2]
+            tree.insert("", "end", values=(ip, port, "Scanning"))
+        elif task[0] == "end":
+            ip, port, success = task[1], task[2], task[3]
+            for item in tree.get_children():
+                if tree.item(item)["values"][0] == ip and tree.item(item)["values"][1] == port:
+                    tree.delete(item)
+            if success:
+                if ip not in open_ports:
+                    open_ports[ip] = []
+                if port not in open_ports[ip]:
+                    open_ports[ip].append(port)
+                    open_ports_tree.insert("", "end", values=(ip, ", ".join(map(str, sorted(open_ports[ip])))))
+    root.after(100, update_gui)
 
-def scan_port(target, port):
-    global scanned_ports
+def scan_port(ip, port):
+    global scanned_tasks
     if not task_running:
         return
+    gui_queue.put(("start", ip, port))
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(float(timeout_var.get()))
-            result = sock.connect_ex((target, port))
-            if result == 0:
-                try:
-                    service_name = socket.getservbyport(port, 'tcp')
-                except:
-                    service_name = "unknown"
-                result_text = f"[+] Port {port} ({service_name}) is open\n"
-            else:
-                result_text = ""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(float(1))
+        result = sock.connect_ex((ip, port))
+        service = socket.getservbyport(port, 'tcp') if result == 0 else ""
+        if result == 0:
+            text_area.insert(tk.END, f"[+] {ip}:{port} ({service}) OPEN\n")
+            gui_queue.put(("end", ip, port, True))
+        else:
+            gui_queue.put(("end", ip, port, False))
+        sock.close()
     except Exception as e:
-        result_text = f"[!] Error scanning port {port}: {str(e)}\n"
-    
-    if result_text:
-        text_area.insert(tk.END, result_text)
-        text_area.see(tk.END)
-    scanned_ports += 1
-    progress['value'] = (scanned_ports / total_ports) * 100
-    root.update_idletasks()
+        text_area.insert(tk.END, f"[!] {ip}:{port} ERROR: {str(e)}\n")
+        gui_queue.put(("end", ip, port, False))
+    scanned_tasks += 1
+    progress["value"] = (scanned_tasks / total_tasks) * 100
 
 def worker():
-    while task_running and not queue_ports.empty():
-        port = queue_ports.get()
-        scan_port(entry_target.get(), port)
-        queue_ports.task_done()
+    while task_running and not q.empty():
+        ip, port = q.get()
+        scan_port(ip, port)
+        q.task_done()
 
 def start_scan_thread():
-    global task_running, scanned_ports, total_ports
+    global task_running, scanned_tasks, total_tasks, q
     if not validate_input():
         return
-    
     task_running = True
-    scanned_ports = 0
-    start_time = time.time()
-    
-    text_area.delete('1.0', tk.END)
+    scanned_tasks = 0
+    progress["value"] = 0
     btn_scan.config(state=tk.DISABLED)
     btn_stop.config(state=tk.NORMAL)
-    progress['value'] = 0
+    text_area.delete('1.0', tk.END)
+    open_ports_tree.delete(*open_ports_tree.get_children())
     
+    ips = parse_ip_range(entry_target.get())
     start_port, end_port = map(int, entry_ports.get().split('-'))
-    total_ports = end_port - start_port + 1
-    progress_label.config(text=f"Scanning {total_ports} ports...")
+    ports = range(start_port, end_port + 1)
+    total_tasks = len(ips) * len(ports)
+    progress_label.config(text=f"Scanning {total_tasks} tasks...")
     
-    for port in range(start_port, end_port + 1):
-        queue_ports.put(port)
+    q = queue.Queue()
+    for ip in ips:
+        for port in ports:
+            q.put((ip, port))
     
-    num_threads = min(int(thread_selector.get()), 500)
-    for _ in range(num_threads):
+    for _ in range(int(thread_selector.get())):
         threading.Thread(target=worker, daemon=True).start()
     
-    monitor_thread = threading.Thread(target=monitor_progress, args=(start_time,))
-    monitor_thread.start()
-
-def monitor_progress(start_time):
-    while task_running:
-        elapsed_time = time.time() - start_time
-        progress_label.config(text=f"Scanned {scanned_ports}/{total_ports} ports - "
-                              f"Elapsed: {elapsed_time:.1f}s")
-        time.sleep(0.1)
-    progress_label.config(text=f"Completed in {time.time() - start_time:.1f} seconds")
+    update_gui()
 
 def stop_scan():
     global task_running
@@ -203,34 +226,10 @@ def stop_scan():
     progress_label.config(text="Scan Stopped")
 
 def export_results():
-    file_path = filedialog.asksaveasfilename(
-        defaultextension=".txt",
-        filetypes=[("Text Files", "*.txt"), ("CSV Files", "*.csv"), ("All Files", "*.*")]
-    )
-    if file_path:
-        with open(file_path, "w") as f:
-            f.write(text_area.get('1.0', tk.END))
-        messagebox.showinfo("Export Successful", f"Results saved to:\n{file_path}")
-
-# دکمه‌های کنترل
-control_frame = ttk.Frame(main_frame)
-control_frame.pack(fill=tk.X, pady=10)
-
-btn_scan = ttk.Button(control_frame, text="Start Scan", command=start_scan_thread)
-btn_scan.pack(side=tk.LEFT, padx=5)
-
-btn_stop = ttk.Button(control_frame, text="Stop Scan", command=stop_scan, state=tk.DISABLED)
-btn_stop.pack(side=tk.LEFT, padx=5)
-
-btn_export = ttk.Button(control_frame, text="Export Results", command=export_results)
-btn_export.pack(side=tk.RIGHT, padx=5)
-
-# مقداردهی اولیه
-preset_ports.bind("<<ComboboxSelected>>", update_preset_ports)
-update_preset_ports()
-queue_ports = queue.Queue()
-task_running = False
-scanned_ports = 0
-total_ports = 0
+    file = filedialog.asksaveasfilename(defaultextension="*.txt")
+    if file:
+        with open(file, "w") as f:
+            f.write(text_area.get("1.0", tk.END))
+        messagebox.showinfo("Success", "Results exported successfully")
 
 root.mainloop()

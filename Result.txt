@@ -1,0 +1,10 @@
+[+] 127.0.0.1:135 (epmap) OPEN
+[+] 127.0.0.1:445 (microsoft-ds) OPEN
+[!] 127.0.0.1:623 ERROR: port/proto not found
+[!] 127.0.0.1:5040 ERROR: port/proto not found
+[!] 127.0.0.1:6800 ERROR: port/proto not found
+[!] 127.0.0.1:7070 ERROR: port/proto not found
+[+] 127.0.0.1:7680 (ms-do) OPEN
+[!] 127.0.0.1:10809 ERROR: port/proto not found
+[!] 127.0.0.1:10808 ERROR: port/proto not found
+
